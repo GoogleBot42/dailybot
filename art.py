@@ -39,6 +39,6 @@ def main(i, irc):
     msg = getArt("")
     if msg is None:
       msg = "No result"
-    else
+    else:
       msg = '"' + msg['title'] + '" ' + msg['objectDate'] + ' ' + msg['primaryImage']
     irc.privmsg(i.channel, msg)
