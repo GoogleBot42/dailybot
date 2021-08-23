@@ -4,11 +4,11 @@ import re
 
 host = "https://collectionapi.metmuseum.org/public/collection/v1/"
 
-# get the list of artwork
-r = requests.get(host + 'objects')
-objects = r.json()['objectIDs']
-
 def getArt(term):
+  # get the list of artwork
+  r = requests.get(host + 'objects')
+  objects = r.json()['objectIDs']
+
   searchObjects = objects
   if term:
     query = {'q': term, 'hasImages': 'true'}
