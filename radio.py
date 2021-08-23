@@ -1,3 +1,5 @@
+import requests
+
 host = "http://localhost:5000/"
 radioUrl = "https://radio.neet.space/stream.mp3"
 
@@ -35,7 +37,7 @@ def play(i, irc):
         m = f"Usage: {i.cmd_prefix}{i.cmd} URL"
         irc.privmsg(i.channel, m)
         return
-    pload = {'url': message[len(".play "):]}
+    pload = {'url': i.msg_nocmd}
     r = requests.post(host+"play", data = pload)
     irc.privmsg(i.channel, r.text)
 
