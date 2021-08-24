@@ -1,3 +1,5 @@
+import re
+
 class Module:
     def __init__(self):
         self.commands = ["karma"]
