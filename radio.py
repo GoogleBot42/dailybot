@@ -1,6 +1,6 @@
 import requests
 
-host = "http://localhost:5000/"
+host = "http://localhost:5500/"
 radioUrl = "https://radio.neet.space/stream.mp3"
 
 class Module:
