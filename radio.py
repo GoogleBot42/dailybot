@@ -46,7 +46,7 @@ def current(i, irc):
     irc.privmsg(i.channel, r.text)
 
 def skip(i, irc):
-    r = requests.get(host+"skip")
+    r = requests.post(host+"skip")
     irc.privmsg(i.channel, r.text)
 
 def queue(i, irc):
