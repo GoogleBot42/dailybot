@@ -32,12 +32,10 @@ def main(i, irc):
         m = (f"\x0305,01drastikbot {irc.var.version}\x0F"
              " | \x0305Python 3.6\x0F"
              " | \x0305GNU AGPLv3 ONLY\x0F"
-             " | \x0311http://drastik.org/drastikbot")
+             " | \x0311http://drastik.org/drastikbot https://git.neet.dev/zuckerberg/dailybuild_modules")
         irc.privmsg(i.channel, m)
     elif i.cmd == "source":
         if not i.msg_nocmd or i.msg_nocmd == irc.var.curr_nickname:
-            m = ("\x0305,01drastikbot\x0F"
-                 " : \x0311https://github.com/olagood/drastikbot\x0F"
-                 " | \x0305,01Modules\x0F"
-                 " : \x0311https://github.com/olagood/drastikbot_modules\x0F")
+            m = ("\x0305,01drastikbot + drastikbot_modules + dailybuild_modules\x0F"
+                 " : \\x0311https://git.neet.dev/zuckerberg/dailybuild_modules\\x0F")
             irc.privmsg(i.channel, m)

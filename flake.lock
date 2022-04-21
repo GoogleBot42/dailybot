@@ -1,39 +1,5 @@
 {
   "nodes": {
-    "drastikbot": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1596211584,
-        "narHash": "sha256-1L8vTE1YEhFWzY5RYb+s5Hb4LrVJNN2leKlZEugEyRU=",
-        "owner": "olagood",
-        "repo": "drastikbot",
-        "rev": "ef72e3afe7602d95c8b014202e220f04796900ab",
-        "type": "github"
-      },
-      "original": {
-        "owner": "olagood",
-        "ref": "v2.1",
-        "repo": "drastikbot",
-        "type": "github"
-      }
-    },
-    "drastikbot_modules": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1619214744,
-        "narHash": "sha256-w1164FkRkeyWnx6a95WDbwEUvNkNwFWa/6mhKtgVw0c=",
-        "owner": "olagood",
-        "repo": "drastikbot_modules",
-        "rev": "3af549a8c3f6e55b63758a61a751bebb1b2db3a3",
-        "type": "github"
-      },
-      "original": {
-        "owner": "olagood",
-        "ref": "v2.1",
-        "repo": "drastikbot_modules",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "locked": {
         "lastModified": 1648297722,
@@ -67,8 +33,6 @@
     },
     "root": {
       "inputs": {
-        "drastikbot": "drastikbot",
-        "drastikbot_modules": "drastikbot_modules",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs"
       }

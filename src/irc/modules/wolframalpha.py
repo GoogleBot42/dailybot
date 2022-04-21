@@ -44,8 +44,9 @@ class Module:
         }
 
 
-AppID = "Enter your AppID here"
-
+import pathlib
+import os
+AppID = pathlib.Path(os.environ["WOLFRAM_ID_FILE"]).read_text()
 
 def short_answers(query):
     url = f"http://api.wolframalpha.com/v1/result?appid={AppID}&i={query}"

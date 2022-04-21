@@ -3,14 +3,9 @@
     nixpkgs.url = "github:NixOS/nixpkgs/21.11";
 
     flake-utils.url = "github:numtide/flake-utils";
-
-    drastikbot.url = "github:olagood/drastikbot/v2.1";
-    drastikbot.flake = false;
-    drastikbot_modules.url = "github:olagood/drastikbot_modules/v2.1";
-    drastikbot_modules.flake = false;
   };
 
-  outputs = { self, nixpkgs, flake-utils, drastikbot, drastikbot_modules, ... }:
+  outputs = { self, nixpkgs, flake-utils, ... }:
     let
       supportedSystems = with flake-utils.lib.system; [ x86_64-linux i686-linux aarch64-linux ];
     in {
@@ -21,40 +16,19 @@
 
           format = "other";
 
-          srcs = [
-            self
-            drastikbot
-            drastikbot_modules
-          ];
+          src = self;
 
           nativeBuildInputs = [ prev.makeWrapper ];
 
           phases = [ "installPhase" ]; # Removes all phases except installPhase
 
           installPhase = ''
-            arr=($srcs)
-            mkdir -p $out/irc/modules
+            mkdir -p $out
 
-            # install dailybuild_modules
-            cp -r ''${arr[0]}/src/* $out/irc/modules
-
-            # install drastikbot core
-            cp -r ''${arr[1]}/src/* $out/
-
-            # install drastikbot modules
-            cp -r ''${arr[2]}/* $out/irc/modules
-
-            # Patch ".bots" command to include reference to dailybuild_modules
-            sed -i 's|\(http://drastik.org/drastikbot"\)|\1 " https://git.neet.dev/zuckerberg/dailybuild_modules"|' $out/irc/modules/information.py
-
-            # Patch ".source" command to include reference to dailybuild_modules
-            sed -i 's|\(https://github.com/olagood/drastikbot_modules\\x0F"\)|\1 " : \\x0311https://git.neet.dev/zuckerberg/dailybuild_modules\\x0F"|' $out/irc/modules/information.py
-
-            # Patch ".wa" command so that the AppID does not need to be hardcoded into the source code of the program
-            sed -i 's|AppID = "Enter your AppID here"|import pathlib\nimport os\nAppID = pathlib.Path(os.environ["WOLFRAM_ID_FILE"]).read_text()|' $out/irc/modules/wolframalpha.py
+            # copy files
+            cp -r $src/src/* $out
 
             mkdir -p $out/bin
-
             makeWrapper ${prev.python3}/bin/python3 $out/bin/drastikbot \
               --prefix PYTHONPATH : ${with prev.python3Packages; makePythonPath [requests beautifulsoup4]} \
               --add-flags "$out/drastikbot.py"
