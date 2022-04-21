@@ -154,11 +154,11 @@ def listquotes(channel, nickname, dbc, irc):
             data += m
 
     if not rest and not sbn:
-        irc.notice(nickname, f"{logo}: No results.")
+        irc.privmsg(nickname, f"{logo}: No results.")
     else:
         pomf_url = listquotes_pomf(data)
         m = f"{logo}: Your quotes can be found here: {pomf_url}"
-        irc.notice(nickname, m)
+        irc.privmsg(nickname, m)
 
 
 def listquotes_pomf(data):

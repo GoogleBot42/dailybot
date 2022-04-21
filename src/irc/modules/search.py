@@ -212,4 +212,4 @@ def main(i, irc):
     # Truncate the output just in case. We can't send 512 bytes anyway.
     m = m[:512]
 
-    irc.notice(receiver, m)
+    irc.privmsg(receiver, m)

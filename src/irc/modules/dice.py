@@ -44,14 +44,14 @@ class Module:
 def main(i, irc):
     values = i.msg_nocmd.split('d')
     if len(values) != 2:
-        irc.notice(i.channel, f"Usage: {i.cmd_prefix}roll <n>d<s>")
+        irc.privmsg(i.channel, f"Usage: {i.cmd_prefix}roll <n>d<s>")
         return
 
     n_dice = int(values[0])
     n_sides = int(values[1])
 
     if n_dice > 1000 or n_sides > 1000:
-        irc.notice(i.channel, f"{i.nickname}: Too many dice or sides given.")
+        irc.privmsg(i.channel, f"{i.nickname}: Too many dice or sides given.")
         return
 
     results = [random.randint(1, n_sides) for i in range(n_dice)]

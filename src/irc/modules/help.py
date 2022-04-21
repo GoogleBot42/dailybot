@@ -84,13 +84,13 @@ def is_hidden(i, module_name):
 
 def module_checks(i, irc, module):
     if module not in i.modules.keys():
-        irc.notice(i.channel, f"Help: `{module}' is not an imported module.")
+        irc.privmsg(i.channel, f"Help: `{module}' is not an imported module.")
         return False
 
     try:
         module_bl = irc.var.modules_obj["blacklist"][module]
         if module_bl and i.channel in module_bl:
-            irc.notice(i.channel, f"Help: This module has been disabled.")
+            irc.privmsg(i.channel, f"Help: This module has been disabled.")
             return False
     except KeyError:
         pass  # No blacklist, move on
@@ -98,14 +98,14 @@ def module_checks(i, irc, module):
     try:
         module_wl = irc.var.modules_obj["whitelist"][module]
         if module_wl and i.channel not in module_wl:
-            irc.notice(i.channel, f"Help: This module has been disabled.")
+            irc.privmsg(i.channel, f"Help: This module has been disabled.")
             return False
     except KeyError:
         pass  # No whitelist, move on
 
     module_c = i.modules[module].Module()
     if not hasattr(module_c, "manual"):
-        irc.notice(i.channel, "Help: This module does not have a manual.")
+        irc.privmsg(i.channel, "Help: This module does not have a manual.")
         return False
 
     return True
@@ -128,7 +128,7 @@ def module_help(i, irc, module):
 
     t = f"\x0311{module}\x0F: {commands}{info}"
     t += f" | Use: {i.cmd_prefix}help <module> <command> for command info."
-    irc.notice(i.channel, t)
+    irc.privmsg(i.channel, t)
 
 
 def command_help(i, irc, module, command):
@@ -138,17 +138,17 @@ def command_help(i, irc, module, command):
     module_c = i.modules[module].Module()
 
     if not hasattr(module_c, "commands"):
-        irc.notice(i.channel, "Help: This module does not provide commands.")
+        irc.privmsg(i.channel, "Help: This module does not provide commands.")
         return
 
     if "bot_commands" not in module_c.manual:
-        irc.notice(i.channel, "Help: No manual entry for this command ")
+        irc.privmsg(i.channel, "Help: No manual entry for this command ")
         return
 
     command_manual = module_c.manual["bot_commands"]
 
     if command not in command_manual:
-        irc.notice(i.channel, "Help: No manual entry for this command.")
+        irc.privmsg(i.channel, "Help: No manual entry for this command.")
         return
 
     command_entry = command_manual[command]
@@ -172,7 +172,7 @@ def command_help(i, irc, module, command):
 
     t = " | ".join(t)
     t = f"{command}: {t}"
-    irc.notice(i.channel, t)
+    irc.privmsg(i.channel, t)
 
 
 def module_list(i, irc):
@@ -185,7 +185,7 @@ def module_list(i, irc):
     m = itertools.chain(m1, m2)
     t = "Help: " + ", ".join(sorted(m))
     t += f" | Use: {i.cmd_prefix}help <module> for module info."
-    irc.notice(i.channel, t)
+    irc.privmsg(i.channel, t)
 
 
 def main(i, irc):
@@ -198,6 +198,6 @@ def main(i, irc):
             command_help(i, irc, argv[0], argv[1])
         else:
             m = f"Usage: {i.cmd_prefix}help [module] [command]"
-            irc.notice(i.channel, m)
+            irc.privmsg(i.channel, m)
     else:
         module_list(i, irc)
