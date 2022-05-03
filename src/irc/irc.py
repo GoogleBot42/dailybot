@@ -145,7 +145,7 @@ class Drastikbot():
         # statement below.
         if multipart:
             time.sleep(self.var.msg_delay)
-            tr = m_len - 2 - len(' '.join(cmds).encode('utf-8')) - remainder
+            tr = m_len - 2 - len(' '.join(cmds).encode('utf-8')) - remainder - 1
             t = text.encode('utf-8')[tr:]
             self.send(cmds, t)
 
