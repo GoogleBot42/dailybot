@@ -74,13 +74,13 @@ def parser():
                          " already exists.")
         conf_dir = str(path.expanduser().resolve())
     else:
-        path = Path('~/.drastikbot').expanduser()
+        path = Path('./drastikbot').expanduser()
         if not path.is_dir():
             try:
                 path.mkdir(parents=True, exist_ok=False)
             except FileExistsError:
                 sys.exit("[Error] Making configuration directory at"
-                         " '~/.drastikbot' failed. Another file with that name"
+                         " './drastikbot' failed. Another file with that name"
                          " already exists.")
         conf_dir = str(path)
 
