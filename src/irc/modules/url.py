@@ -269,6 +269,7 @@ def twitter(url):
 hosts_d = {
     "youtube.com": youtube,
     "youtu.be": youtube,
+    "m.youtube.com": youtube,
     "lainchan.org": lainchan,
     "i.imgur.com": imgur,
     "imgur.com": imgur,
