@@ -1,0 +1,24 @@
+name: Check Flake
+
+on: [push]
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  check-flake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install sudo
+        run: apt-get update && apt-get install sudo
+
+      - name: Install Nix
+        uses: https://github.com/cachix/install-nix-action@v20
+
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check Flake
+        run: nix flake check --show-trace
