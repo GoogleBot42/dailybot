@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/21.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
 
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -10,7 +10,7 @@
       supportedSystems = with flake-utils.lib.system; [ x86_64-linux i686-linux aarch64-linux ];
     in {
       overlay = final: prev: {
-        drastikbot = prev.python3Packages.buildPythonApplication rec {
+        drastikbot = prev.python311.pkgs.buildPythonApplication rec {
           pname = "drastikbot";
           version = "v2.1";
 
@@ -29,8 +29,8 @@
             cp -r $src/src/* $out
 
             mkdir -p $out/bin
-            makeWrapper ${prev.python3}/bin/python3 $out/bin/drastikbot \
-              --prefix PYTHONPATH : ${with prev.python3Packages; makePythonPath [requests beautifulsoup4]} \
+            makeWrapper ${prev.python311}/bin/python3 $out/bin/drastikbot \
+              --prefix PYTHONPATH : ${with prev.python311.pkgs; makePythonPath [requests beautifulsoup4]} \
               --add-flags "$out/drastikbot.py"
           '';
         };
