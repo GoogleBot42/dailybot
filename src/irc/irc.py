@@ -205,7 +205,9 @@ class Drastikbot():
             self.irc_socket = socket.create_connection(
                 (self.var.host, self.var.port), 300)
             if self.var.ssl:
-                self.irc_socket = ssl.wrap_socket(self.irc_socket)
+                context = ssl.create_default_context()
+                self.irc_socket = context.wrap_socket(
+                    self.irc_socket, server_hostname=self.var.host)
         except OSError:
             if self.var.sigint:
                 return
