@@ -40,7 +40,7 @@ parser = 'html.parser'
 user_agent = "w3m/0.52"
 accept_lang = "en-US"
 nsfw_tag = "\x0304[NSFW]\x0F"
-data_limit = 69120
+data_limit = 1048576  # YouTube pages have the <title> after ~800KB
 # --------------------- #
 
 
@@ -89,6 +89,35 @@ def get_url(msg):
     return urls
 
 
+def find_title(data):
+    '''
+    Find the page's title in 'data', which is the html of a page or the
+    start of it. The <title> tag is not always in the <head> (YouTube
+    puts it in the <body>) and <svg> images have <title> tags of their own,
+    so search the whole document and skip those. If there is no <title>,
+    try the og:title and twitter:title meta tags.
+    '''
+    lower = data.lower()
+    for m in re.finditer(r'<title\b[^>]*>(.*?)</title\s*>', data,
+                         re.IGNORECASE | re.DOTALL):
+        if lower.rfind('<svg', 0, m.start()) > lower.rfind('</svg', 0,
+                                                             m.start()):
+            continue  # This <title> belongs to an <svg>
+        title = bs4.BeautifulSoup(m.group(1), parser).get_text()
+        title = " ".join(title.split())
+        if title:
+            return title
+
+    head_end = lower.find('</head>')
+    soup = bs4.BeautifulSoup(data[:head_end] if head_end != -1 else data,
+                             parser)
+    for attrs in ({"property": "og:title"}, {"name": "twitter:title"}):
+        meta = soup.find("meta", attrs=attrs)
+        if meta and meta.get("content", "").strip():
+            return " ".join(meta["content"].split())
+    return ""
+
+
 def default_parser(u):
     '''
     Visit each url and check if there is html content
@@ -96,7 +125,7 @@ def default_parser(u):
     tag. If there is not try to read the http headers
     to find 'content-type' and 'content-length'.
     '''
-    data = ""
+    data = b""
     output = ""
     try:
         r = requests.get(u, stream=True,
@@ -105,15 +134,26 @@ def default_parser(u):
                          timeout=5)
     except Exception:
         return False
-    for i in r.iter_content(chunk_size=512, decode_unicode=False):
-        data += i.decode('utf-8', errors='ignore')
-        if len(data) > data_limit or '</head>' in data.lower():
-            break
+    # Don't download files that are not web pages.
+    if "html" in r.headers.get("content-type", "html").lower():
+        # Read until both the <title> and the end of the <head> have been
+        # seen, as some modules need the <meta> tags of the <head>.
+        title_end = head_end = False
+        for i in r.iter_content(chunk_size=8192, decode_unicode=False):
+            # Also search the end of the previous chunk, in case a tag
+            # was split between two chunks.
+            chunk = (data[-16:] + i).lower()
+            data += i
+            title_end = title_end or b'</title' in chunk
+            head_end = head_end or b'</head>' in chunk
+            if len(data) > data_limit or (title_end and head_end):
+                break
     r.close()
-    soup = bs4.BeautifulSoup(data, parser)
-    try:
-        output += soup.head.title.text.strip()
-    except Exception:
+    # Decode once at the end so multibyte characters split between chunks
+    # are not lost.
+    data = data.decode('utf-8', errors='ignore')
+    output += find_title(data)
+    if not output:
         try:
             output += r.headers['content-type']
         except KeyError:
