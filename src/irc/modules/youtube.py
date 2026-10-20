@@ -11,7 +11,6 @@
 #
 # Depends:
 #   - requests      :: $ pip3 install requests
-#   - beautifulsoup :: $ pip3 install beautifulsoup4
 
 '''
 Copyright (C) 2018-2020 drastik.org
@@ -33,9 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import urllib.parse
 import json
 import requests
-import bs4
-
-import url
 
 
 class Module:
@@ -48,7 +44,6 @@ class Module:
 
 
 # ----- Constants ----- #
-parser = 'html.parser'
 lang = "en-US"
 user_agent = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
               " AppleWebKit/537.36 (KHTML, like Gecko)"
@@ -56,22 +51,25 @@ user_agent = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 # --------------------- #
 
 
-#
-# New Parser
-#
+def _text(obj):
+    '''Get the text out of a YouTube "simpleText" or "runs" object.'''
+    if not obj:
+        return False
+    if "simpleText" in obj:
+        return obj["simpleText"]
+    return "".join(r.get("text", "") for r in obj.get("runs", [])) or False
+
 
 def yt_vid_info(v):
     yt_id = v["videoId"]
     short_url = f"https://youtu.be/{yt_id}"
-    name = v["title"]["runs"][0]["text"]
+    name = _text(v.get("title"))
     # Usually youtube's automated music uploads dont have dates.
-    try:
-        date = v["publishedTimeText"]["simpleText"]
-    except KeyError:
-        date = False
-    duration = v["lengthText"]["simpleText"]
-    views = v["viewCountText"]["simpleText"]
-    channel = v["ownerText"]["runs"][0]["text"]
+    date = _text(v.get("publishedTimeText"))
+    # Live streams don't have a length.
+    duration = _text(v.get("lengthText")) or "LIVE"
+    views = _text(v.get("viewCountText")) or "N/A"
+    channel = _text(v.get("ownerText") or v.get("longBylineText")) or "N/A"
 
     return {
         'short_url': short_url, 'name': name, 'date': date, 'views': views,
@@ -93,24 +91,18 @@ def yt_search(query):
         st = 'window["ytInitialData"] = '
         st_i = r.text.index(st) + len(st)
 
-    j_data = r.text[st_i:]
+    j, _ = json.JSONDecoder().raw_decode(r.text[st_i:])
 
-    st = '};'
-    st_i = j_data.index(st)
+    sections = j["contents"]['twoColumnSearchResultsRenderer'][
+        'primaryContents']['sectionListRenderer']['contents']
 
-    j_data = j_data[:st_i+1]
-    j = json.loads(j_data)
-
-    res = j["contents"]['twoColumnSearchResultsRenderer']['primaryContents'][
-        'sectionListRenderer']['contents'][0]['itemSectionRenderer'][
-        'contents']  # What in the world?
-
-    for vid in res:
-        if "videoRenderer" in vid:
-            v = vid["videoRenderer"]  # Video information
-            return yt_vid_info(v)
-        elif 'searchPyvRenderer' in vid:
-            continue  # Skip promoted videos
+    for section in sections:
+        res = section.get('itemSectionRenderer', {}).get('contents', [])
+        for vid in res:
+            # Promoted videos, shelves, channels, etc. are skipped.
+            if "videoRenderer" in vid:
+                return yt_vid_info(vid["videoRenderer"])  # Video information
+    return False
 
 
 def output(i):
@@ -130,61 +122,16 @@ def output(i):
             f"{date}")
 
 
-#
-# Old parser
-#
-
-def yt_search_legacy(query):
-    '''
-    Search YouTube for 'query' and get a video from the search results.
-    It tries to visit the video found to ensure that it is valid.
-    Returns:
-        - 'yt_id' : The YouTube ID of the result video.
-        - False   : If no video is found for 'query'.
-    '''
-    search = (f'https://m.youtube.com/results?search_query={query}')
-    r = requests.get(search, headers={"Accept-Language": lang}, timeout=10)
-    #print(r.text, file=open("output.html", "a"))
-    soup = bs4.BeautifulSoup(r.text, parser)
-    for s in soup.find_all('a', {'class': ['yt-uix-tile-link']}):
-        yt_id = urllib.parse.urlparse(s.get('href')).query
-        print(yt_id)
-        yt_id = urllib.parse.parse_qs(yt_id)
-        print(yt_id)
-        try:
-            yt_id = yt_id['v'][0]
-        except KeyError:
-            try:
-                yt_id = yt_id['video_id'][0]
-            except KeyError:
-                continue
-        yt_id = ''.join(yt_id.split())
-        # Try to visit the url to make sure it's a valid one.
-        try:
-            u = f'https://m.youtube.com/watch?v={yt_id}'
-            requests.get(u, timeout=10)
-            break
-        except Exception:
-            pass
-    else:
-        return False
-    return yt_id
-
-
-def output_legacy(yt_id):
-    '''Format the output message to be returned.'''
-    logo_yt = "\x0300,04 ► \x0F (legacy)"
-    short_url = f"https://youtu.be/{yt_id}"
-    title = url.youtube(short_url)
-    return f"{logo_yt}: {short_url} | {title}"
-
-
 def main(i, irc):
     if i.cmd:
         query = urllib.parse.quote_plus(i.msg_nocmd)
         try:
-            out = output(yt_search(query))
+            res = yt_search(query)
         except Exception as e:
             print(e)
-            out = output_legacy(yt_search_legacy(query))
+            res = False
+        if res:
+            out = output(res)
+        else:
+            out = f"YouTube: No results found for \"{i.msg_nocmd}\""
         irc.privmsg(i.channel, out)
