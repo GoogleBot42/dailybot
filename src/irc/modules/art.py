@@ -4,6 +4,10 @@ import re
 import time
 
 host = "https://collectionapi.metmuseum.org/public/collection/v1/"
+search_host = "https://collectionapi.metmuseum.org/public/collection/v1.1/"
+search_window = 10000  # /v1.1/search returns nothing past this offset
+search_page = 20  # Search results to pick from
+tries = 10  # Objects to try before giving up on finding one with an image
 # How long to keep the list of artwork before fetching it again (seconds)
 objects_ttl = 24 * 60 * 60
 
@@ -19,26 +23,34 @@ def getObjects(i):
     i.varset('objects', (time.time(), objects))
   return objects
 
+def searchObjects(term):
+  # /v1.1/search is paginated and only serves the first 10000 results, so
+  # count the matches, then fetch one random page of them.
+  query = {'q': term, 'hasImages': 'true', 'limit': 1}
+  r = requests.get(search_host + 'search', params=query, timeout=30)
+  total = min(r.json()['total'], search_window)
+  if total == 0:
+    return []
+  query['limit'] = search_page
+  query['offset'] = random.randrange(0, max(total - search_page, 0) + 1)
+  r = requests.get(search_host + 'search', params=query, timeout=30)
+  return r.json()['objectIDs'] or []
+
 def getArt(i, term):
-  # get the list of artwork
-  objects = getObjects(i)
-
-  searchObjects = objects
   if term:
-    query = {'q': term, 'hasImages': 'true'}
-    r = requests.get(host + 'search', params=query)
-    searchObjects = r.json()['objectIDs']
+    objects = searchObjects(term)
+  else:
+    objects = getObjects(i)
 
-  if not searchObjects or len(searchObjects) == 0:
+  if not objects:
     return None
 
-  tries = 10
-  while tries > 0:
-    r = requests.get(host + 'objects/' + str(random.choice(searchObjects)))
+  # Not every object has an image we are allowed to post, try a few.
+  for objectID in random.sample(objects, min(len(objects), tries)):
+    r = requests.get(host + 'objects/' + str(objectID), timeout=30)
     j = r.json()
-    if j['primaryImage']:
+    if j.get('primaryImage'):
       return j
-    tries -= 1
   return None
 
 class Module:
@@ -46,13 +58,25 @@ class Module:
         self.commands = ['art']
         self.manual = {
             "desc": ("Post random art from metmuseum's api"),
-            "bot_commands": {"art": {"usage": lambda x: f"{x}art"}}
+            "bot_commands": {"art": {
+                "usage": lambda x: f"{x}art [search term]",
+                "info": "Without a search term, any artwork can be posted."
+            }}
         }
 
 def main(i, irc):
-    msg = getArt(i, "")
+    term = i.msg_nocmd.strip()
+    try:
+      msg = getArt(i, term)
+    except (requests.RequestException, ValueError, KeyError) as e:
+      # The API answers with an html error page when it blocks a request.
+      print(f"art: {e}")
+      return irc.privmsg(i.channel, "The Met's collection API is not "
+                         "responding right now, try again later.")
     if msg is None:
-      msg = "No result"
+      msg = f'No result for "{term}"' if term else "No result"
     else:
-      msg = '"' + msg['title'] + '" ' + msg['objectDate'] + ' ' + msg['primaryImage']
+      # Some titles contain html, e.g. "Arrowhead (<i>Yanone</i>)"
+      title = re.sub(r'<[^>]+>', '', msg['title'])
+      msg = '"' + title + '" ' + msg['objectDate'] + ' ' + msg['primaryImage']
     irc.privmsg(i.channel, msg)
