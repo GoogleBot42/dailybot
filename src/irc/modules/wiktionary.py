@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import requests
 import bs4
-import re
 from dbot_tools import p_truncate
 
 
@@ -55,63 +54,116 @@ class Module:
 # ----- Global Constants ----- #
 r_timeout = 10
 bs4_parser = 'html.parser'
+# Wikimedia rejects requests without a descriptive user agent:
+# https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+user_agent = "drastikbot/2.1 (https://git.neet.dev/zuckerberg/dailybot)"
 # ---------------------------- #
 
 
-def get_text(html, etymology):
-    soup = bs4.BeautifulSoup(html, bs4_parser)
-
-    result = {}
-    result[etymology] = {}
-
-    s_et = soup.find('span', id=etymology)
-    result[etymology]["Etymology"] = s_et.find_next('p').text
-
-    ids = ("Noun", "Verb", "Adjective", "Adverb",
-           "Interjection", "Particle", "Preposition")
-    for i in ids:
-        s = s_et.find_next('span', string=i)
-        try:
-            txt = s.find_next('ol').text
-            result[etymology][i] = txt
-        except Exception as e:
-            pass
-
-    return result
+# Part of speech headings to post definitions for.
+pos_headings = ("Noun", "Verb", "Adjective", "Adverb", "Interjection",
+                "Particle", "Preposition", "Pronoun", "Conjunction",
+                "Proper noun", "Numeral", "Determiner", "Article", "Prefix",
+                "Suffix", "Phrase", "Prepositional phrase", "Proverb",
+                "Contraction", "Abbreviation", "Initialism", "Acronym",
+                "Symbol", "Letter")
 
 
-def extract_etymologies(html):
-    result = {}
-    count = 1
-    while(True):
-        if 'id="Etymology"' in html:
-            result.update(get_text(html, "Etymology"))
-            break
-        elif f'id="Etymology_{count}"' in html:
-            result.update(get_text(html, f"Etymology_{count}"))
-            count += 1
+def heading_level(tag):
+    '''
+    Return the level of a section heading or 0 if 'tag' is not a heading.
+    Headings look like: <div class="mw-heading mw-heading3"><h3>...</h3></div>
+    '''
+    if getattr(tag, "name", None) != "div":
+        return 0
+    for c in tag.get("class", []):
+        if c.startswith("mw-heading") and c[10:].isdigit():
+            return int(c[10:])
+    return 0
+
+
+def language_section(soup):
+    '''
+    Return the elements of the English section of the page, or of the first
+    language on the page if there is no English section.
+    '''
+    h2 = soup.find("h2", id="English")
+    if h2 is None:
+        for h in soup.find_all("h2"):
+            if heading_level(h.parent) == 2:
+                h2 = h
+                break
         else:
-            break
+            return []
 
-    return result
+    section = []
+    for tag in h2.parent.find_next_siblings():
+        if heading_level(tag) == 2:
+            break
+        section.append(tag)
+    return section
+
+
+def section_text(tags, i, name):
+    '''
+    Get the text of the first 'name' element (e.g "p" or "ol") that follows
+    the heading at tags[i], before the next heading.
+    '''
+    for tag in tags[i + 1:]:
+        if heading_level(tag):
+            return False
+        if tag.name == name:
+            # Remove quotations so that they are not in the definitions.
+            for q in tag.find_all(["ul", "dl"]):
+                q.decompose()
+            for q in tag.find_all("span", class_="defdate"):
+                q.decompose()
+            for q in tag.find_all("sup", class_="reference"):
+                q.decompose()  # Footnote links like [1]
+            if name == "ol":
+                # Number the definitions to keep them on one line.
+                items = [" ".join(li.text.split())
+                         for li in tag.find_all("li", recursive=False)]
+                text = " ".join(f"{n}. {t}"
+                                for n, t in enumerate(filter(None, items), 1))
+            else:
+                text = " ".join(tag.text.split())
+            return text or False
+    return False
 
 
 def wiktionary(url, res):
-    r = requests.get(url, timeout=r_timeout)
+    r = requests.get(url, timeout=r_timeout,
+                     headers={"user-agent": user_agent})
+    soup = bs4.BeautifulSoup(r.text, bs4_parser)
+    tags = language_section(soup)
 
-    # Extract the html of a single language section.
-    section_end = '<hr'
-    html = ""
-    for t in r.text.splitlines():
-        html += t
-        if section_end in t:
-            break
+    result = {}
+    current = "Etymology"  # Used for words without an etymology section.
+    count = 0
+    for i, tag in enumerate(tags):
+        if not heading_level(tag):
+            continue
+        h = tag.find(["h3", "h4", "h5", "h6"])
+        if h is None:
+            continue
+        title = h.get_text().strip()
+        if title.startswith("Etymology"):
+            count += 1
+            current = "Etymology" if title == "Etymology" \
+                else f"Etymology_{count}"
+            result.setdefault(current, {})
+            txt = section_text(tags, i, "p")
+            if txt:
+                result[current]["Etymology"] = txt
+        elif title in pos_headings:
+            txt = section_text(tags, i, "ol")
+            if txt and title not in result.get(current, {}):
+                result.setdefault(current, {})[title] = txt
 
-    # Remove quotations so that beautifulsoup doesn't catch them.
-    html = re.compile(r'(?ims)<ul>.*?</ul>').sub('', html)
-    html = re.compile(r'(?ims)<dl>.*?</dl>').sub('', html)
-    html = re.compile(r'(?ims)<span class="defdate">.*?</span>').sub('', html)
-    return extract_etymologies(html)
+    # Etymologies without definitions are not useful.
+    return {k: v for k, v in result.items()
+            if any(p in v for p in pos_headings)}
 
 
 def query(args):
@@ -150,13 +202,7 @@ def main(i, irc):
         msg = f'Wiktionary: No definition was found for "{q}" | {url}'
         return irc.privmsg(i.channel, msg)
 
-    if res == 1:
-        try:
-            result = result["Etymology"]
-        except KeyError:
-            result = result["Etymology_1"]
-    else:
-        result = result[f"Etymology_{res}"]
+    result = list(result.values())[res - 1]
 
     msg_len = (irc.var.msg_len - 9 - 8 - len(str(result_length))
                - (len(result) * 5) - len(url))
