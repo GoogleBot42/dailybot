@@ -29,6 +29,8 @@ import urllib.parse
 import requests
 import bs4
 
+import youtube as yt
+
 
 class Module:
     def __init__(self):
@@ -181,16 +183,12 @@ def default_parser(u):
 #                                            #
 def youtube(url):
     '''Visit a video and get it's information.'''
+    out = yt.url_output(url)
+    if out:
+        return out
     logo = "\x0300,04 ► \x0F"
-    u = f"https://www.youtube.com/oembed?url={url}"
-    r = requests.get(u, timeout=10)
-    if r:
-        j = r.json()
-        return (f"{logo}: {j['title']}"
-                f" | \x02Channel:\x0F {j['author_name']}")
-    else:
-        out = default_parser(url)[0]
-        return f"{logo}: {out}"
+    out = default_parser(url)[0]
+    return f"{logo}: {out}"
 
 
 def lainchan(url):

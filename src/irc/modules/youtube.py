@@ -44,6 +44,8 @@ class Module:
 
 
 # ----- Constants ----- #
+# logo_yt = "\x0301,00You\x0300,04Tube\x0F"
+logo_yt = "\x0300,04 ► \x0F"
 lang = "en-US"
 user_agent = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
               " AppleWebKit/537.36 (KHTML, like Gecko)"
@@ -105,11 +107,71 @@ def yt_search(query):
     return False
 
 
+def yt_id_from_url(u):
+    '''
+    Get the video ID from a YouTube url.
+    Returns False if 'u' is not a YouTube video url.
+    '''
+    try:
+        up = urllib.parse.urlparse(u)
+    except ValueError:
+        return False
+    host = (up.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = [p for p in up.path.split("/") if p]
+    if host == "youtu.be" and path:
+        return path[0]
+    if host not in ("youtube.com", "m.youtube.com", "music.youtube.com"):
+        return False
+    if path and path[0] == "watch":
+        v = urllib.parse.parse_qs(up.query).get("v")
+        return v[0] if v else False
+    if len(path) > 1 and path[0] in ("shorts", "live", "embed", "v"):
+        return path[1]
+    return False
+
+
+def _duration(seconds):
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}:{m:02}:{s:02}"
+    return f"{m}:{s:02}"
+
+
+def yt_video_info(yt_id):
+    '''
+    Visit a video's page and get its information.
+    Returns the same dictionary as yt_vid_info().
+    '''
+    u = f'https://www.youtube.com/watch?v={yt_id}'
+    r = requests.get(u, timeout=10,
+                     headers={"Accept-Language": lang,
+                              "user-agent": user_agent})
+    st = 'var ytInitialPlayerResponse = '
+    st_i = r.text.index(st) + len(st)
+    j, _ = json.JSONDecoder().raw_decode(r.text[st_i:])
+
+    vd = j["videoDetails"]
+    mf = j.get("microformat", {}).get("playerMicroformatRenderer", {})
+    if vd.get("isLive") or vd.get("lengthSeconds", "0") == "0":
+        duration = "LIVE"
+    else:
+        duration = _duration(vd["lengthSeconds"])
+    date = mf.get("publishDate", mf.get("uploadDate", ""))[:10] or False
+
+    return {
+        'short_url': f"https://youtu.be/{vd['videoId']}",
+        'name': vd["title"], 'date': date,
+        'views': f"{int(vd['viewCount']):,} views",
+        'channel': vd["author"], 'duration': duration,
+        'yt_id': vd["videoId"]
+    }
+
+
 def output(i):
     '''Format the output message to be returned.'''
-    # logo_yt = "\x0301,00You\x0300,04Tube\x0F"
-    logo_yt = "\x0300,04 ► \x0F"
-
     if i["date"]:
         date = f" | \x02Uploaded:\x0F {i['date']}"
     else:
@@ -122,8 +184,33 @@ def output(i):
             f"{date}")
 
 
+def url_output(u):
+    '''
+    Get the output message for a YouTube video url.
+    This is used for both ".yt <url>" and urls posted in a channel.
+    Returns False if no information could be found.
+    '''
+    yt_id = yt_id_from_url(u)
+    if yt_id:
+        try:
+            return output(yt_video_info(yt_id))
+        except Exception as e:
+            print(e)
+    # Fallback for urls we can't parse, like playlists.
+    r = requests.get(f"https://www.youtube.com/oembed?url={u}", timeout=10)
+    if r:
+        j = r.json()
+        return (f"{logo_yt}: {j['title']}"
+                f" | \x02Channel:\x0F {j['author_name']}")
+    return False
+
+
 def main(i, irc):
     if i.cmd:
+        u = i.msg_nocmd.strip()
+        if yt_id_from_url(u):
+            out = url_output(u) or f"YouTube: Nothing found for {u}"
+            return irc.privmsg(i.channel, out)
         query = urllib.parse.quote_plus(i.msg_nocmd)
         try:
             res = yt_search(query)
