@@ -1,13 +1,27 @@
 import requests
 import random
 import re
+import time
 
 host = "https://collectionapi.metmuseum.org/public/collection/v1/"
+# How long to keep the list of artwork before fetching it again (seconds)
+objects_ttl = 24 * 60 * 60
 
-def getArt(term):
+def getObjects(i):
+  # The list of artwork is ~3.5MB, so keep it in the bot's memory instead of
+  # fetching it on every command. Module globals are reset when the bot
+  # reloads its modules, which happens on every message, so use varset.
+  cache = i.varget('objects', defval=(0, None))
+  fetched, objects = cache
+  if objects is None or time.time() - fetched > objects_ttl:
+    r = requests.get(host + 'objects', timeout=30)
+    objects = r.json()['objectIDs']
+    i.varset('objects', (time.time(), objects))
+  return objects
+
+def getArt(i, term):
   # get the list of artwork
-  r = requests.get(host + 'objects')
-  objects = r.json()['objectIDs']
+  objects = getObjects(i)
 
   searchObjects = objects
   if term:
@@ -36,7 +50,7 @@ class Module:
         }
 
 def main(i, irc):
-    msg = getArt("")
+    msg = getArt(i, "")
     if msg is None:
       msg = "No result"
     else:
