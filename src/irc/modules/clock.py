@@ -29,6 +29,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
+import datetime
+import re
 import urllib.parse
 
 import requests
@@ -40,7 +42,8 @@ class Module():
         self.manual = {
             "desc": "Get time information about a country, a city, or a state",
             "bot_commands": {
-                "time": {"usage": lambda x: f"{x}time <country/city/state>"}
+                "time": {"usage": lambda x: (
+                    f"{x}time <country/city/state | utc[+-offset]>")}
             }
         }
 
@@ -83,6 +86,37 @@ def get_timezone_from_name(query):
     return ret
 
 
+def get_utc_time(query):
+    '''
+    Get the time for "utc", "gmt" or "z", optionally with an offset such as
+    "utc+2", "UTC -5" or "gmt+5:30". Returns False if 'query' is not one.
+    '''
+    m = re.fullmatch(r"(utc|gmt|z)\s*(?:([+-])\s*(\d{1,2})(?::?(\d{2}))?)?",
+                     query.strip(), re.IGNORECASE)
+    if not m:
+        return False
+    name, sign, hours, minutes = m.groups()
+    name = name.upper()
+    offset = datetime.timedelta(hours=int(hours or 0),
+                                minutes=int(minutes or 0))
+    if offset > datetime.timedelta(hours=14):
+        return f'Time: "{query}" is not a valid UTC offset'
+    if sign == "-":
+        offset = -offset
+
+    time = datetime.datetime.now(datetime.timezone.utc) + offset
+    time = time.strftime("%Y-%m-%d %H:%M")
+    if sign:
+        hm = f"{hours}:{minutes}" if minutes else hours
+        name = f"{name}{sign}{hm}"
+    gmtOffset = offset.total_seconds() / 3600
+    gmtOffset = int(gmtOffset) if gmtOffset.is_integer() else gmtOffset
+    return f"Time in {name}: {time} GMT {gmtOffset}"
+
+
 def main(i, irc):
+    utc = get_utc_time(i.msg_nocmd)
+    if utc:
+        return irc.privmsg(i.channel, utc)
     query = urllib.parse.quote_plus(i.msg_nocmd)
     irc.privmsg(i.channel, get_timezone_from_name(query))
