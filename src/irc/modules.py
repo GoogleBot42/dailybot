@@ -29,8 +29,52 @@ import importlib
 import traceback
 import inspect
 import sqlite3
+import threading
 from dbot_tools import Config, Logger
 from toolbox import user_acl
+
+
+class _Serialized:
+    """
+    Run every method call of the wrapped sqlite3 object while holding a
+    lock that is shared by the connection and all of its cursors.
+    """
+    def __init__(self, obj, lock):
+        self._obj = obj
+        self._lock = lock
+
+    def __getattr__(self, name):
+        attr = getattr(self._obj, name)
+        if not callable(attr):
+            return attr  # e.g. cursor.lastrowid
+
+        def call(*args, **kwargs):
+            with self._lock:
+                ret = attr(*args, **kwargs)
+            if isinstance(ret, sqlite3.Cursor):
+                # cursor(), and execute() which returns its cursor.
+                return self if ret is self._obj \
+                    else _Serialized(ret, self._lock)
+            return ret
+        return call
+
+    def __iter__(self):
+        with self._lock:
+            return iter(self._obj.fetchall())
+
+
+def serialized_connection(*args, **kwargs):
+    """
+    Open an sqlite3 connection that can be shared by threads.
+
+    The bot handles every message in a thread of its own, so modules use
+    the same connection at the same time. sqlite3 connections are not safe
+    for that, and fail with errors like "bad parameter or other API misuse".
+    Every call on the returned connection, or on its cursors, is made while
+    holding one lock.
+    """
+    conn = sqlite3.connect(*args, check_same_thread=False, **kwargs)
+    return _Serialized(conn, threading.RLock())
 
 
 class VariableMemory:
@@ -115,9 +159,9 @@ class Modules:
         self.startup_list = []  # [module1, ...]
         self.command_dict = {}  # {command1: module}
         # Databases #
-        self.dbmem = sqlite3.connect(':memory:', check_same_thread=False)
-        self.dbdisk = sqlite3.connect('{}/drastikbot.db'.format(self.cd),
-                                      check_same_thread=False)
+        self.dbmem = serialized_connection(':memory:')
+        self.dbdisk = serialized_connection(
+            '{}/drastikbot.db'.format(self.cd))
         self.mod_settings = {}  # {Module Name : {setting : value}}
 
     def mod_imp_prep(self, module_dir, auto=False):

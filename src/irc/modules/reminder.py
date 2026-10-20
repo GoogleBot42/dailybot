@@ -140,10 +140,11 @@ def send_due(irc, db):
     dbc.execute("SELECT id, nickname, channel, msg, created FROM reminder "
                 "WHERE due <= ? ORDER BY due;", (now,))
     for rid, nickname, channel, msg, created in dbc.fetchall():
-        ago = format_duration(now - created)
-        irc.privmsg(channel, f"{nickname}: Reminder: {msg} (set {ago} ago)")
+        # Delete before sending, so a failed delete can't send it twice.
         dbc.execute("DELETE FROM reminder WHERE id=?;", (rid,))
         db.commit()
+        ago = format_duration(now - created)
+        irc.privmsg(channel, f"{nickname}: Reminder: {msg} (set {ago} ago)")
 
 
 def reminder_loop(varget, db):
